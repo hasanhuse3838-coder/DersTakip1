@@ -110,6 +110,13 @@ class WifiDirectService : Service() {
                 serverSocket = ServerSocket(PORT)
                 while (isRunning) {
                     val client = serverSocket?.accept() ?: break
+                    val senderIp = client.inetAddress?.hostAddress
+                    if (!senderIp.isNullOrBlank()) {
+                        getSharedPreferences("DersTakipPrefs", Context.MODE_PRIVATE)
+                            .edit()
+                            .putString("target_host_ip", senderIp)
+                            .apply()
+                    }
                     val reader = BufferedReader(InputStreamReader(client.getInputStream()))
                     val message = reader.readLine()
                     client.close()

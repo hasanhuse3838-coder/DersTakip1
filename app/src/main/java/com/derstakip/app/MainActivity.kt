@@ -72,13 +72,19 @@ class MainActivity : AppCompatActivity() {
                         if (info != null && info.groupFormed) {
                             if (!info.isGroupOwner && info.groupOwnerAddress != null) {
                                 targetHostAddress = info.groupOwnerAddress.hostAddress
+                                prefs.edit().putString("target_host_ip", targetHostAddress).apply()
                                 tvConnectionStatus.text = "Durum: Bağlandı (${targetHostAddress})"
                             } else {
+                                targetHostAddress = prefs.getString("target_host_ip", null)
                                 tvConnectionStatus.text = "Durum: Grup Sahibi (Bağlantı hazır)"
                             }
                         } else {
-                            targetHostAddress = null
-                            tvConnectionStatus.text = "Durum: Bağlı cihaz yok (Dinlemede)"
+                            targetHostAddress = prefs.getString("target_host_ip", null)
+                            if (targetHostAddress != null) {
+                                tvConnectionStatus.text = "Durum: Son cihaz kayıtlı ($targetHostAddress)"
+                            } else {
+                                tvConnectionStatus.text = "Durum: Bağlı cihaz yok (Dinlemede)"
+                            }
                         }
                     }
                 }
@@ -141,6 +147,11 @@ class MainActivity : AppCompatActivity() {
         val savedLogs = prefs.getString("saved_logs", "")
         if (!savedLogs.isNullOrBlank()) {
             tvLogs.text = savedLogs
+        }
+
+        targetHostAddress = prefs.getString("target_host_ip", null)
+        if (targetHostAddress != null) {
+            tvConnectionStatus.text = "Durum: Son cihaz kayıtlı ($targetHostAddress)"
         }
     }
 
