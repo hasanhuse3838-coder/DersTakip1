@@ -2,15 +2,14 @@ package com.derstakip.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.wifi.p2p.WifiP2pConfig
-import android.net.wifi.p2p.WifiP2pDevice
-import android.net.wifi.p2p.WifiP2pInfo
-import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -36,10 +35,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStartStudy: Button
     private lateinit var btnFinishStudy: Button
 
-    private lateinit var manager: WifiP2pManager
-    private lateinit var channel: WifiP2pManager.Channel
-    private var targetHostAddress: String? = null
-    private val peers = mutableListOf<WifiP2pDevice>()
+    private var bluetoothAdapter: BluetoothAdapter? = null
+    private var targetDevice: BluetoothDevice? = null
 
     private val prefs by lazy { getSharedPreferences("DersTakipPrefs", Context.MODE_PRIVATE) }
     private val timerHandler = Handler(Looper.getMainLooper())
@@ -55,59 +52,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val p2pReceiver = object : BroadcastReceiver() {
+    private val messageReceiver = object : BroadcastReceiver() {
         @SuppressLint("MissingPermission")
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
-                    if (hasWifiPermissions()) {
-                        manager.requestPeers(channel) { peerList ->
-                            peers.clear()
-                            peers.addAll(peerList.deviceList)
-                        }
-                    }
-                }
-                WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
-                    manager.requestConnectionInfo(channel) { info: WifiP2pInfo? ->
-                        if (info != null && info.groupFormed) {
-                            if (!info.isGroupOwner && info.groupOwnerAddress != null) {
-                                targetHostAddress = info.groupOwnerAddress.hostAddress
-                                prefs.edit().putString("target_host_ip", targetHostAddress).apply()
-                                tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
-                                targetHostAddress?.let { host ->
-                                    WifiDirectService.sendMessage(host, "__PING__") {}
-                                }
-                            } else {
-                                targetHostAddress = prefs.getString("target_host_ip", null)
-                                if (targetHostAddress != null) {
-                                    tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
-                                } else {
-                                    tvConnectionStatus.text = "Durum: Grup Sahibi (Karşı taraf bekleniyor)"
-                                }
-                            }
-                        } else {
-                            targetHostAddress = prefs.getString("target_host_ip", null)
-                            if (targetHostAddress != null) {
-                                tvConnectionStatus.text = "Durum: Son cihaz kayıtlı ($targetHostAddress)"
-                            } else {
-                                tvConnectionStatus.text = "Durum: Bağlı cihaz yok (Dinlemede)"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private val messageReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val msg = intent?.getStringExtra(WifiDirectService.EXTRA_MESSAGE) ?: return
-            if (msg == "__PING__") {
-                targetHostAddress = prefs.getString("target_host_ip", null)
-                if (targetHostAddress != null) {
-                    tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
-                }
-                return
+            val msg = intent?.getStringExtra(BluetoothService.EXTRA_MESSAGE) ?: return
+            val savedAddr = prefs.getString("target_bt_address", null)
+            val savedName = prefs.getString("target_bt_name", null)
+            if (savedAddr != null && targetDevice == null) {
+                targetDevice = bluetoothAdapter?.getRemoteDevice(savedAddr)
+                tvConnectionStatus.text = "Durum: Bağlı (${savedName ?: savedAddr})"
             }
             appendLog("Gelen: $msg")
         }
@@ -125,20 +78,22 @@ class MainActivity : AppCompatActivity() {
         btnStartStudy = findViewById(R.id.btnStartStudy)
         btnFinishStudy = findViewById(R.id.btnFinishStudy)
 
-        manager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-        channel = manager.initialize(this, mainLooper, null)
+        btnDiscover.text = "Eşleşmiş Telefonu Seç"
+
+        val btManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothAdapter = btManager.adapter
 
         requestRequiredPermissions()
         startBackgroundService()
         restoreState()
 
-        btnDiscover.setOnClickListener { discoverAndShowPeers() }
+        btnDiscover.setOnClickListener { showPairedDevicesDialog() }
         btnStartStudy.setOnClickListener { onStartStudyClicked() }
         btnFinishStudy.setOnClickListener { onFinishStudyClicked() }
     }
 
     private fun startBackgroundService() {
-        val serviceIntent = Intent(this, WifiDirectService::class.java)
+        val serviceIntent = Intent(this, BluetoothService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
@@ -146,6 +101,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun restoreState() {
         checkAndResetDailyTotalIfNewDay()
         val dailySec = prefs.getLong("daily_total_sec", 0L)
@@ -163,9 +119,11 @@ class MainActivity : AppCompatActivity() {
             tvLogs.text = savedLogs
         }
 
-        targetHostAddress = prefs.getString("target_host_ip", null)
-        if (targetHostAddress != null) {
-            tvConnectionStatus.text = "Durum: Son cihaz kayıtlı ($targetHostAddress)"
+        val savedAddr = prefs.getString("target_bt_address", null)
+        val savedName = prefs.getString("target_bt_name", null)
+        if (savedAddr != null && bluetoothAdapter != null) {
+            targetDevice = bluetoothAdapter?.getRemoteDevice(savedAddr)
+            tvConnectionStatus.text = "Durum: Seçili (${savedName ?: savedAddr})"
         }
     }
 
@@ -213,67 +171,53 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendOrLogMessage(msg: String) {
         appendLog("Giden: $msg")
-        val host = targetHostAddress
-        if (host != null) {
-            WifiDirectService.sendMessage(host, msg) { success ->
+        val device = targetDevice
+        if (device != null) {
+            BluetoothService.sendMessage(device, msg) { success ->
                 runOnUiThread {
                     if (success) {
                         Toast.makeText(this, "Mesaj karşı tarafa iletildi!", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(this, "Mesaj gönderilemedi, bağlantıyı kontrol et.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Mesaj gönderilemedi. Karşı telefonda Bluetooth ve uygulama açık mı?", Toast.LENGTH_LONG).show()
                     }
                 }
             }
         } else {
-            Toast.makeText(this, "Bağlı cihaz yok, mesaj sadece kaydedildi.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Önce 'Eşleşmiş Telefonu Seç' butonundan cihaz seçin.", Toast.LENGTH_SHORT).show()
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun discoverAndShowPeers() {
-        if (!hasWifiPermissions()) {
+    private fun showPairedDevicesDialog() {
+        if (!hasBluetoothPermissions()) {
             requestRequiredPermissions()
             return
         }
 
-        manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                Toast.makeText(this@MainActivity, "Yakındaki cihazlar aranıyor...", Toast.LENGTH_SHORT).show()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    showPeersDialog()
-                }, 1500)
-            }
-
-            override fun onFailure(reason: Int) {
-                Toast.makeText(this@MainActivity, "Arama başlatılamadı (Wi-Fi açık mı?)", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun showPeersDialog() {
-        if (peers.isEmpty()) {
-            Toast.makeText(this, "Yakında cihaz bulunamadı. Diğer telefonda da uygulamayı açın.", Toast.LENGTH_LONG).show()
+        val adapter = bluetoothAdapter
+        if (adapter == null || !adapter.isEnabled) {
+            Toast.makeText(this, "Lütfen önce Bluetooth'u açın!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val names = peers.map { it.deviceName ?: it.deviceAddress }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Bağlanılacak Telefonu Seç")
-            .setItems(names) { _, which ->
-                val device = peers[which]
-                val config = WifiP2pConfig().apply {
-                    deviceAddress = device.deviceAddress
-                }
-                manager.connect(channel, config, object : WifiP2pManager.ActionListener {
-                    override fun onSuccess() {
-                        Toast.makeText(this@MainActivity, "${device.deviceName} ile bağlanılıyor...", Toast.LENGTH_SHORT).show()
-                    }
+        val pairedDevices = adapter.bondedDevices?.toList() ?: emptyList()
+        if (pairedDevices.isEmpty()) {
+            Toast.makeText(this, "Eşleşmiş cihaz yok. Önce telefonun Bluetooth ayarlarından diğer telefonu eşleştirin.", Toast.LENGTH_LONG).show()
+            return
+        }
 
-                    override fun onFailure(reason: Int) {
-                        Toast.makeText(this@MainActivity, "Bağlantı başarısız oldu.", Toast.LENGTH_SHORT).show()
-                    }
-                })
+        val names = pairedDevices.map { "${it.name ?: "Bilinmeyen"} (${it.address})" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Mesaj Gidecek Telefonu Seç")
+            .setItems(names) { _, which ->
+                val selected = pairedDevices[which]
+                targetDevice = selected
+                prefs.edit()
+                    .putString("target_bt_address", selected.address)
+                    .putString("target_bt_name", selected.name ?: selected.address)
+                    .apply()
+                tvConnectionStatus.text = "Durum: Seçili (${selected.name ?: selected.address})"
+                Toast.makeText(this, "${selected.name} seçildi!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("İptal", null)
             .show()
@@ -315,35 +259,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun hasWifiPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+    private fun hasBluetoothPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
         } else {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            true
         }
     }
 
     private fun requestRequiredPermissions() {
-        val perms = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+        val perms = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+            perms.add(Manifest.permission.BLUETOOTH_SCAN)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            perms.add(Manifest.permission.NEARBY_WIFI_DEVICES)
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        ActivityCompat.requestPermissions(this, perms.toTypedArray(), 100)
+        if (perms.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, perms.toTypedArray(), 100)
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        val p2pFilter = IntentFilter().apply {
-            addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
-            addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
-        }
-        registerReceiver(p2pReceiver, p2pFilter)
-
-        val msgFilter = IntentFilter(WifiDirectService.ACTION_MESSAGE_RECEIVED)
+        val msgFilter = IntentFilter(BluetoothService.ACTION_MESSAGE_RECEIVED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(messageReceiver, msgFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -353,7 +293,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        unregisterReceiver(p2pReceiver)
         unregisterReceiver(messageReceiver)
     }
 
