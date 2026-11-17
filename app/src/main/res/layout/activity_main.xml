@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#F5F7FA">
+
+    <!-- Başlık ve Bağlantı Durumu -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="DersTakip (Wi-Fi Direct)"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#1565C0"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tvConnectionStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Durum: Bağlı cihaz yok (Dinlemede)"
+        android:textSize="14sp"
+        android:textColor="#546E7A"
+        android:gravity="center"
+        android:layout_marginBottom="10dp" />
+
+    <Button
+        android:id="@+id/btnDiscover"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Yakındaki Telefonu Bul ve Bağlan"
+        android:backgroundTint="#1E88E5"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Sayaç Kartı -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:padding="20dp"
+        android:elevation="2dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/tvTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00:00"
+            android:textSize="44sp"
+            android:textStyle="bold"
+            android:textColor="#263238" />
+
+        <TextView
+            android:id="@+id/tvDailyTotal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bugün Toplam: 0 dk 0 sn"
+            android:textSize="15sp"
+            android:textColor="#455A64"
+            android:layout_marginTop="6dp" />
+    </LinearLayout>
+
+    <!-- Derse Başladım / Bitirdim Butonları -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/btnStartStudy"
+            android:layout_width="0dp"
+            android:layout_height="64dp"
+            android:layout_weight="1"
+            android:text="Derse\nBaşladım"
+            android:backgroundTint="#2E7D32"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:layout_marginEnd="6dp" />
+
+        <Button
+            android:id="@+id/btnFinishStudy"
+            android:layout_width="0dp"
+            android:layout_height="64dp"
+            android:layout_weight="1"
+            android:text="Dersimi\nBitirdim"
+            android:backgroundTint="#C62828"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+    <!-- Mesaj Geçmişi -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Mesaj Geçmişi"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#37474F"
+        android:layout_marginBottom="6dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#FFFFFF"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tvLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Henüz mesaj yok.\n"
+            android:textSize="14sp"
+            android:textColor="#263238"
+            android:lineSpacingExtra="4dp" />
+    </ScrollView>
+
+</LinearLayout>
