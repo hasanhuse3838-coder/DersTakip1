@@ -122,12 +122,20 @@ class WifiDirectService : Service() {
                     client.close()
 
                     if (!message.isNullOrBlank()) {
-                        showAlertNotification(message)
-                        val broadcast = Intent(ACTION_MESSAGE_RECEIVED).apply {
-                            putExtra(EXTRA_MESSAGE, message)
-                            setPackage(packageName)
+                        if (message == "__PING__") {
+                            val broadcast = Intent(ACTION_MESSAGE_RECEIVED).apply {
+                                putExtra(EXTRA_MESSAGE, "__PING__")
+                                setPackage(packageName)
+                            }
+                            sendBroadcast(broadcast)
+                        } else {
+                            showAlertNotification(message)
+                            val broadcast = Intent(ACTION_MESSAGE_RECEIVED).apply {
+                                putExtra(EXTRA_MESSAGE, message)
+                                setPackage(packageName)
+                            }
+                            sendBroadcast(broadcast)
                         }
-                        sendBroadcast(broadcast)
                     }
                 }
             } catch (e: Exception) {

@@ -73,10 +73,17 @@ class MainActivity : AppCompatActivity() {
                             if (!info.isGroupOwner && info.groupOwnerAddress != null) {
                                 targetHostAddress = info.groupOwnerAddress.hostAddress
                                 prefs.edit().putString("target_host_ip", targetHostAddress).apply()
-                                tvConnectionStatus.text = "Durum: Bağlandı (${targetHostAddress})"
+                                tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
+                                targetHostAddress?.let { host ->
+                                    WifiDirectService.sendMessage(host, "__PING__") {}
+                                }
                             } else {
                                 targetHostAddress = prefs.getString("target_host_ip", null)
-                                tvConnectionStatus.text = "Durum: Grup Sahibi (Bağlantı hazır)"
+                                if (targetHostAddress != null) {
+                                    tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
+                                } else {
+                                    tvConnectionStatus.text = "Durum: Grup Sahibi (Karşı taraf bekleniyor)"
+                                }
                             }
                         } else {
                             targetHostAddress = prefs.getString("target_host_ip", null)
@@ -95,6 +102,13 @@ class MainActivity : AppCompatActivity() {
     private val messageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val msg = intent?.getStringExtra(WifiDirectService.EXTRA_MESSAGE) ?: return
+            if (msg == "__PING__") {
+                targetHostAddress = prefs.getString("target_host_ip", null)
+                if (targetHostAddress != null) {
+                    tvConnectionStatus.text = "Durum: Çift Yönlü Bağlandı (${targetHostAddress})"
+                }
+                return
+            }
             appendLog("Gelen: $msg")
         }
     }
